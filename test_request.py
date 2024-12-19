@@ -1,67 +1,87 @@
-import requests
+import unittest
+from app import app, db, Items  # Учитываем корректное название таблицы
 
-BASE_URL = "http://127.0.0.1:5000"
+class Test(unittest.TestCase):
 
-# 1. POST /items - Добавление нового товара
-def add_item():
-    url = f"{BASE_URL}/items"
-    data = {
-        "name": "Laptop",
-        "quantity": 10,
-        "price": 1200,
-        "category": "Electronics"
-    }
-    response = requests.post(url, json=data)
-    print("Add Item Response:", response.json(), response.status_code)
+    def setUp(self):
+        self.app = app.test_client()
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        app.config['TESTING'] = True
+        with app.app_context():  # Создаем контекст приложения
+            db.create_all()
 
-# 2. GET /items - Получение списка товаров
-def get_items():
-    url = f"{BASE_URL}/items"
-    response = requests.get(url)
-    print("Get Items Response:", response.json(), response.status_code)
+    def tearDown(self):
+        with app.app_context():  # Создаем контекст приложения
+            db.session.remove()
+            db.drop_all()
 
-# 3. GET /items?category=Electronics - Получение товаров по категории
-def get_items_by_category():
-    url = f"{BASE_URL}/items?category=Electronics"
-    response = requests.get(url)
-    print("Get Items by Category Response:", response.json(), response.status_code)
+    def test_add_item(self):
+        response = self.app.post('/items', json={
+            'name': 'Test Item',
+            'quantity': 10,
+            'price': 5.99,
+            'category': 'Test Category'
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertIn(b'Item added successfully', response.data)
 
-# 4. PUT /items/<item_id> - Обновление товара
-def update_item(item_id):
-    url = f"{BASE_URL}/items/{item_id}"
-    data = {
-        "name": "Updated Laptop",
-        "quantity": 5,
-        "price": 1100,
-        "category": "Electronics"
-    }
-    response = requests.put(url, json=data)
-    print("Update Item Response:", response.json(), response.status_code)
+    def test_get_items(self):
+        with app.app_context():  # Создаем контекст приложения
+            item = Items(name='Test Item', quantity=10, price=5.99, category='Test Category')
+            db.session.add(item)
+            db.session.commit()
 
-# # 5. DELETE /items/<item_id> - Удаление товара
-# def delete_item(item_id):
-#     url = f"{BASE_URL}/items/{item_id}"
-#     response = requests.delete(url)
-#     print("Delete Item Response:", response.json(), response.status_code)
+        response = self.app.get('/items')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Test Item', response.data)
 
-# 6. GET /reports/summary - Генерация отчета
-def generate_report():
-    url = f"{BASE_URL}/reports/summary"
-    response = requests.get(url)
-    print("Generate Report Response:", response.json(), response.status_code)
+    def test_update_item(self):
+        with app.app_context():
+            item = Items(name='Test Item', quantity=10, price=5.99, category='Test Category')
+            db.session.add(item)
+            db.session.commit()
+            item_id = item.id  # Сохраняем ID перед выходом из контекста
 
-# 7. GET /reports/summary?format=csv - Генерация CSV отчета
-def generate_csv_report():
-    url = f"{BASE_URL}/reports/summary?format=csv"
-    response = requests.get(url)
-    print("Generate CSV Report Response:", response.json(), response.status_code)
+        # Теперь используем item_id
+        response = self.app.put(f'/items/{item_id}', json={
+            'quantity': 20
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Item updated successfully', response.data)
 
-# Выполнение всех запросов
-if __name__ == "__main__":
-    add_item()  # Добавление товара
-    get_items()  # Получение всех товаров
-    get_items_by_category()  # Получение товаров по категории
-    update_item(2)  # Обновление товара с ID 1
-    # delete_item(1)  # Удаление товара с ID 1
-    generate_report()  # Генерация отчета
-    generate_csv_report()  # Генерация CSV отчета
+        with app.app_context():
+            updated_item = Items.query.get(item_id)
+            self.assertEqual(updated_item.quantity, 20)
+
+    def test_delete_item(self):
+        with app.app_context():
+            item = Items(name='Test Item', quantity=10, price=5.99, category='Test Category')
+            db.session.add(item)
+            db.session.commit()
+            item_id = item.id  # Сохраняем ID перед выходом из контекста
+
+        # Теперь используем item_id
+        response = self.app.delete(f'/items/{item_id}')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Item deleted successfully', response.data)
+
+        with app.app_context():
+            deleted_item = Items.query.get(item_id)
+            self.assertIsNone(deleted_item)
+
+
+    def test_generate_report(self):
+        with app.app_context():
+            item1 = Items(name='Test Item 1', quantity=10, price=5.99, category='Category A')
+            item2 = Items(name='Test Item 2', quantity=0, price=3.99, category='Category B')
+            db.session.add_all([item1, item2])
+            db.session.commit()
+
+        response = self.app.get('/reports/summary')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Category A', response.data)
+        self.assertIn(b'Category B', response.data)
+        self.assertIn(b'Test Item 2', response.data)
+
+if __name__ == '__main__':
+    unittest.main()
