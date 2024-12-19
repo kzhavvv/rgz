@@ -1,5 +1,5 @@
 import unittest
-from app import app, db, Items  # Учитываем корректное название таблицы
+from app import app, db, Items  
 
 class Test(unittest.TestCase):
 
@@ -7,11 +7,11 @@ class Test(unittest.TestCase):
         self.app = app.test_client()
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         app.config['TESTING'] = True
-        with app.app_context():  # Создаем контекст приложения
+        with app.app_context(): 
             db.create_all()
 
     def tearDown(self):
-        with app.app_context():  # Создаем контекст приложения
+        with app.app_context(): 
             db.session.remove()
             db.drop_all()
 
@@ -26,7 +26,7 @@ class Test(unittest.TestCase):
         self.assertIn(b'Item added successfully', response.data)
 
     def test_get_items(self):
-        with app.app_context():  # Создаем контекст приложения
+        with app.app_context():  
             item = Items(name='Test Item', quantity=10, price=5.99, category='Test Category')
             db.session.add(item)
             db.session.commit()
@@ -40,7 +40,7 @@ class Test(unittest.TestCase):
             item = Items(name='Test Item', quantity=10, price=5.99, category='Test Category')
             db.session.add(item)
             db.session.commit()
-            item_id = item.id  # Сохраняем ID перед выходом из контекста
+            item_id = item.id  
 
         # Теперь используем item_id
         response = self.app.put(f'/items/{item_id}', json={
@@ -58,7 +58,7 @@ class Test(unittest.TestCase):
             item = Items(name='Test Item', quantity=10, price=5.99, category='Test Category')
             db.session.add(item)
             db.session.commit()
-            item_id = item.id  # Сохраняем ID перед выходом из контекста
+            item_id = item.id  
 
         # Теперь используем item_id
         response = self.app.delete(f'/items/{item_id}')
